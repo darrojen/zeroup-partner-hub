@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, DollarSign, Calendar, CreditCard, FileImage, Loader2, CheckCircle, Sparkles } from 'lucide-react';
+import { Upload, DollarSign, Calendar, CreditCard, FileImage, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -136,16 +136,13 @@ export default function SubmitPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-scale-in">
-        <div className="relative">
-          <div className="absolute inset-0 bg-primary/20 rounded-full blur-3xl animate-pulse" />
-          <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-primary to-amber-500 shadow-gold">
-            <CheckCircle className="w-12 h-12 text-primary-foreground" />
-          </div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="flex items-center justify-center w-20 h-20 rounded-full bg-success/10">
+          <CheckCircle className="w-10 h-10 text-success" />
         </div>
-        <h2 className="mt-6 text-2xl font-bold">Submission Received!</h2>
+        <h2 className="mt-6 text-2xl font-semibold">Submission Received!</h2>
         <p className="mt-2 text-center text-muted-foreground">
-          Your contribution of <span className="text-primary font-semibold">${parseFloat(amount).toLocaleString()}</span> is pending approval.
+          Your contribution of <span className="font-semibold">${parseFloat(amount).toLocaleString()}</span> is pending approval.
         </p>
         <p className="mt-1 text-sm text-muted-foreground">Redirecting to dashboard...</p>
       </div>
@@ -153,19 +150,16 @@ export default function SubmitPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       {/* Header */}
-      <header className="text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-amber-500 shadow-gold mb-3">
-          <Sparkles className="w-7 h-7 text-primary-foreground" />
-        </div>
-        <h1 className="text-2xl font-bold">Submit Contribution</h1>
+      <header>
+        <h1 className="text-2xl font-semibold">Submit Contribution</h1>
         <p className="text-sm text-muted-foreground">Record your partnership payment</p>
       </header>
 
-      <Card>
+      <Card className="border shadow-sm">
         <CardHeader>
-          <CardTitle className="text-lg">Contribution Details</CardTitle>
+          <CardTitle className="text-base font-medium">Contribution Details</CardTitle>
           <CardDescription>Fill in the details of your contribution</CardDescription>
         </CardHeader>
         <CardContent>
@@ -182,7 +176,7 @@ export default function SubmitPage() {
                 placeholder="1000"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="text-lg font-semibold"
+                className="text-lg font-medium"
                 min="1"
                 step="0.01"
                 required
@@ -241,16 +235,16 @@ export default function SubmitPage() {
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-200',
+                  'flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
                   proofFile
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/50 hover:bg-secondary/50'
+                    ? 'border-success bg-success/5'
+                    : 'border-border hover:border-muted-foreground/50 hover:bg-secondary/50'
                 )}
               >
                 {proofFile ? (
                   <>
-                    <CheckCircle className="w-8 h-8 text-primary" />
-                    <p className="text-sm font-medium text-primary">{proofFile.name}</p>
+                    <CheckCircle className="w-8 h-8 text-success" />
+                    <p className="text-sm font-medium">{proofFile.name}</p>
                     <p className="text-xs text-muted-foreground">Click to change</p>
                   </>
                 ) : (
@@ -282,7 +276,7 @@ export default function SubmitPage() {
               <div className="space-y-2">
                 <div className="h-2 rounded-full bg-secondary overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary to-amber-500 transition-all duration-300"
+                    className="h-full bg-primary transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -295,7 +289,6 @@ export default function SubmitPage() {
             {/* Submit Button */}
             <Button
               type="submit"
-              variant="gold"
               size="lg"
               className="w-full"
               disabled={isSubmitting}
