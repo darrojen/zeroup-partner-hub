@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const signInSchema = z.object({
@@ -16,15 +17,17 @@ const signInSchema = z.object({
 
 const signUpSchema = signInSchema.extend({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
+  role: z.enum(['partner', 'admin']),
 });
 
 export default function AuthPage() {
-  const { user, signIn, signUp, isLoading: authLoading } = useAuth();
+  const { user, signUp, signIn, isLoading: authLoading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<'partner' | 'admin'>('partner');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -44,7 +47,7 @@ export default function AuthPage() {
   const validateForm = () => {
     try {
       if (isSignUp) {
-        signUpSchema.parse({ email, password, fullName });
+        signUpSchema.parse({ email, password, fullName, role });
       } else {
         signInSchema.parse({ email, password });
       }
@@ -73,7 +76,7 @@ export default function AuthPage() {
 
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, fullName);
+        const { error } = await signUp(email, password, fullName, role);
         if (error) {
           if (error.message.includes('already registered')) {
             toast({
@@ -90,7 +93,7 @@ export default function AuthPage() {
           }
         } else {
           toast({
-            title: 'Welcome to ZeroUp!',
+            title: 'Welcome!',
             description: 'Your account has been created successfully.',
           });
           navigate('/dashboard');
@@ -113,26 +116,20 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col items-center justify-center p-4">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md space-y-8">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
         {/* Logo */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-gold shadow-gold mb-4">
-            <Sparkles className="w-8 h-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground font-bold text-xl">
+            Z
           </div>
-          <h1 className="text-3xl font-bold text-gradient-gold">ZeroUp Next</h1>
-          <p className="text-muted-foreground">Partner Engagement Platform</p>
+          <h1 className="text-2xl font-bold text-foreground">ZeroUp Next</h1>
+          <p className="text-muted-foreground text-sm">Partner Engagement Platform</p>
         </div>
 
-        <Card variant="glass" className="border-border/30">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl">
+        <Card className="border shadow-sm">
+          <CardHeader className="text-center pb-4">
+            <CardTitle className="text-xl font-semibold">
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </CardTitle>
             <CardDescription>
@@ -144,20 +141,36 @@ export default function AuthPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {isSignUp && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="bg-secondary/50 border-border/50"
-                  />
-                  {errors.fullName && (
-                    <p className="text-xs text-destructive">{errors.fullName}</p>
-                  )}
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="John Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                    {errors.fullName && (
+                      <p className="text-xs text-destructive">{errors.fullName}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Account Type</Label>
+                    <Select value={role} onValueChange={(value: 'partner' | 'admin') => setRole(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="partner">Partner</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.role && (
+                      <p className="text-xs text-destructive">{errors.role}</p>
+                    )}
+                  </div>
+                </>
               )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -167,7 +180,6 @@ export default function AuthPage() {
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-secondary/50 border-border/50"
                 />
                 {errors.email && (
                   <p className="text-xs text-destructive">{errors.email}</p>
@@ -181,7 +193,6 @@ export default function AuthPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-secondary/50 border-border/50"
                 />
                 {errors.password && (
                   <p className="text-xs text-destructive">{errors.password}</p>
@@ -189,13 +200,12 @@ export default function AuthPage() {
               </div>
               <Button
                 type="submit"
-                variant="gold"
                 className="w-full"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     {isSignUp ? 'Creating account...' : 'Signing in...'}
                   </>
                 ) : (

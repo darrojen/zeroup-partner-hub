@@ -1,17 +1,15 @@
 import { useAuth } from '@/hooks/useAuth';
-import { StatCard } from '@/components/StatCard';
-import { RankBadge, RankIcon } from '@/components/RankBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DollarSign, TrendingUp, Calendar, Target, ChevronRight, Sparkles } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Calendar, ArrowRight, Check, Clock, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 
 export default function DashboardPage() {
-  const { partner, user } = useAuth();
+  const { partner, isAdmin } = useAuth();
 
   // Fetch recent contributions
   const { data: contributions } = useQuery({
@@ -23,10 +21,24 @@ export default function DashboardPage() {
         .select('*')
         .eq('partner_id', partner.id)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10);
       return data || [];
     },
     enabled: !!partner?.id,
+  });
+
+  // Fetch pending contributions for admin
+  const { data: pendingContributions } = useQuery({
+    queryKey: ['pending-contributions'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contributions')
+        .select('*, partners(full_name, email)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+    enabled: isAdmin,
   });
 
   // Fetch impact score history
@@ -39,14 +51,14 @@ export default function DashboardPage() {
         .select('*')
         .eq('partner_id', partner.id)
         .order('recorded_at', { ascending: true })
-        .limit(12);
+        .limit(7);
       return data || [];
     },
     enabled: !!partner?.id,
   });
 
   const chartData = scoreHistory?.map((item) => ({
-    date: format(new Date(item.recorded_at), 'MMM'),
+    date: format(new Date(item.recorded_at), 'dd'),
     score: item.score,
   })) || [];
 
@@ -58,165 +70,326 @@ export default function DashboardPage() {
 
   const firstName = partner?.full_name?.split(' ')[0] || 'Partner';
 
+  // Calculate month-over-month change
+  const approvedContributions = contributions?.filter(c => c.status === 'approved') || [];
+  const lastMonthTotal = approvedContributions
+    .filter(c => {
+      const date = new Date(c.contribution_date);
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      return date.getMonth() === lastMonth.getMonth() && date.getFullYear() === lastMonth.getFullYear();
+    })
+    .reduce((sum, c) => sum + Number(c.amount), 0);
+
+  const thisMonthTotal = approvedContributions
+    .filter(c => {
+      const date = new Date(c.contribution_date);
+      const now = new Date();
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    })
+    .reduce((sum, c) => sum + Number(c.amount), 0);
+
+  const percentChange = lastMonthTotal > 0 
+    ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100)
+    : 0;
+
+  if (isAdmin) {
+    return <AdminDashboard pendingContributions={pendingContributions || []} />;
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       {/* Header */}
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Welcome back,</p>
-          <h1 className="text-2xl font-bold">{firstName} 👋</h1>
-        </div>
-        <RankIcon rank={partner?.rank || 'bronze'} />
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">Hello, {firstName}</h1>
+        <p className="text-muted-foreground text-sm">Track your partnership progress here.</p>
       </header>
 
-      {/* Rank Card */}
-      <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/20 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <CardContent className="p-6 relative">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Current Rank</p>
-              <RankBadge rank={partner?.rank || 'bronze'} size="lg" />
-              <p className="text-xs text-muted-foreground mt-2">
-                Keep contributing to level up!
-              </p>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-full bg-secondary">
+                <DollarSign className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <span className="text-sm text-muted-foreground">Total Income</span>
             </div>
-            <div className="text-right">
-              <p className="text-4xl font-bold text-gradient-gold">
-                {partner?.impact_score || 0}
-              </p>
-              <p className="text-sm text-muted-foreground">Impact Score</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            <p className="text-2xl font-semibold">${(partner?.total_contributions || 0).toLocaleString()}</p>
+            {percentChange !== 0 && (
+              <div className={`flex items-center gap-1 text-xs mt-1 ${percentChange > 0 ? 'text-success' : 'text-destructive'}`}>
+                {percentChange > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                <span>{percentChange > 0 ? '+' : ''}{percentChange}%</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <StatCard
-          title="Total Contributed"
-          value={`$${(partner?.total_contributions || 0).toLocaleString()}`}
-          icon={DollarSign}
-          variant="gold"
-        />
-        <StatCard
-          title="This Month"
-          value={hasContributedThisMonth ? '✓ Done' : 'Pending'}
-          subtitle={hasContributedThisMonth ? 'Great work!' : 'Submit now'}
-          icon={Calendar}
-        />
+        <Card className="border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-full bg-secondary">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <span className="text-sm text-muted-foreground">This Month</span>
+            </div>
+            <p className="text-2xl font-semibold">${thisMonthTotal.toLocaleString()}</p>
+            <p className={`text-xs mt-1 ${hasContributedThisMonth ? 'text-success' : 'text-warning'}`}>
+              {hasContributedThisMonth ? 'Completed' : 'Pending'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-full bg-secondary">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <span className="text-sm text-muted-foreground">Impact</span>
+            </div>
+            <p className="text-2xl font-semibold">{partner?.impact_score || 0}</p>
+            <p className="text-xs text-muted-foreground mt-1 capitalize">{partner?.rank || 'Bronze'}</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Impact Score Chart */}
+      {/* Performance Chart */}
       {chartData.length > 0 && (
-        <Card>
+        <Card className="border shadow-sm">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Impact Trend</CardTitle>
-              <TrendingUp className="w-4 h-4 text-primary" />
-            </div>
+            <CardTitle className="text-base font-medium">Performance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-40">
+            <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(43 96% 56%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(43 96% 56%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                <LineChart data={chartData}>
                   <XAxis 
                     dataKey="date" 
                     axisLine={false} 
                     tickLine={false}
-                    tick={{ fill: 'hsl(215 20% 55%)', fontSize: 12 }}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   />
                   <YAxis hide />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'hsl(222 47% 9%)',
-                      border: '1px solid hsl(222 30% 18%)',
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                     }}
                   />
-                  <Area
+                  <Line
                     type="monotone"
                     dataKey="score"
-                    stroke="hsl(43 96% 56%)"
+                    stroke="hsl(var(--chart-blue))"
                     strokeWidth={2}
-                    fill="url(#scoreGradient)"
+                    dot={{ fill: 'hsl(var(--chart-blue))', strokeWidth: 0, r: 4 }}
+                    activeDot={{ r: 6 }}
                   />
-                </AreaChart>
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Link to="/submit">
-            <Button variant="gold" className="w-full justify-between" size="lg">
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                Submit Contribution
-              </span>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </Link>
-          <Link to="/leaderboard">
-            <Button variant="outline" className="w-full justify-between" size="lg">
-              <span className="flex items-center gap-2">
-                <Target className="w-5 h-5" />
-                View Leaderboard
-              </span>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
       {/* Recent Activity */}
-      {contributions && contributions.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-medium">Recent Contributions</CardTitle>
+          <Link to="/submit">
+            <Button variant="ghost" size="sm" className="text-sm">
+              Add New <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {contributions && contributions.length > 0 ? (
             <div className="space-y-3">
-              {contributions.slice(0, 3).map((contribution) => (
+              {contributions.slice(0, 5).map((contribution) => (
                 <div
                   key={contribution.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
+                  className="flex items-center justify-between py-3 border-b last:border-b-0"
                 >
-                  <div>
-                    <p className="font-medium">${Number(contribution.amount).toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(contribution.contribution_date), 'MMM d, yyyy')}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${
+                      contribution.status === 'approved' ? 'bg-success/10' :
+                      contribution.status === 'rejected' ? 'bg-destructive/10' : 'bg-warning/10'
+                    }`}>
+                      {contribution.status === 'approved' ? (
+                        <Check className="w-4 h-4 text-success" />
+                      ) : contribution.status === 'rejected' ? (
+                        <X className="w-4 h-4 text-destructive" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-warning" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium">${Number(contribution.amount).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(contribution.contribution_date), 'MMM d, yyyy')}
+                      </p>
+                    </div>
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      contribution.status === 'approved'
-                        ? 'bg-success/20 text-success'
-                        : contribution.status === 'rejected'
-                        ? 'bg-destructive/20 text-destructive'
-                        : 'bg-warning/20 text-warning'
-                    }`}
-                  >
+                  <span className={`text-xs font-medium capitalize ${
+                    contribution.status === 'approved' ? 'text-success' :
+                    contribution.status === 'rejected' ? 'text-destructive' : 'text-warning'
+                  }`}>
                     {contribution.status}
                   </span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-sm">No contributions yet</p>
+              <Link to="/submit">
+                <Button className="mt-4" size="sm">Submit Your First Contribution</Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Admin Dashboard Component
+function AdminDashboard({ pendingContributions }: { pendingContributions: any[] }) {
+  const { toast } = require('@/hooks/use-toast').useToast();
+
+  const handleApprove = async (contributionId: string, partnerId: string, amount: number) => {
+    // Update contribution status
+    const { error: updateError } = await supabase
+      .from('contributions')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+      .eq('id', contributionId);
+
+    if (updateError) {
+      toast({ title: 'Error', description: 'Failed to approve contribution', variant: 'destructive' });
+      return;
+    }
+
+    // Update partner's total contributions
+    const { data: partnerData } = await supabase
+      .from('partners')
+      .select('total_contributions, impact_score')
+      .eq('id', partnerId)
+      .single();
+
+    if (partnerData) {
+      const newTotal = Number(partnerData.total_contributions) + amount;
+      const newScore = partnerData.impact_score + Math.floor(amount / 100);
+
+      await supabase
+        .from('partners')
+        .update({ 
+          total_contributions: newTotal,
+          impact_score: newScore 
+        })
+        .eq('id', partnerId);
+    }
+
+    toast({ title: 'Success', description: 'Contribution approved and total updated' });
+    window.location.reload();
+  };
+
+  const handleReject = async (contributionId: string) => {
+    const { error } = await supabase
+      .from('contributions')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+      .eq('id', contributionId);
+
+    if (error) {
+      toast({ title: 'Error', description: 'Failed to reject contribution', variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'Rejected', description: 'Contribution has been rejected' });
+    window.location.reload();
+  };
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">Admin Dashboard</h1>
+        <p className="text-muted-foreground text-sm">Manage partner contributions and approvals.</p>
+      </header>
+
+      {/* Pending Stats */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-full bg-warning/10">
+              <Clock className="w-6 h-6 text-warning" />
+            </div>
+            <div>
+              <p className="text-3xl font-semibold">{pendingContributions.length}</p>
+              <p className="text-sm text-muted-foreground">Pending Approvals</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pending Contributions */}
+      <Card className="border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-medium">Pending Contributions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pendingContributions.length > 0 ? (
+            <div className="space-y-4">
+              {pendingContributions.map((contribution) => (
+                <div key={contribution.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-medium">{contribution.partners?.full_name}</p>
+                      <p className="text-sm text-muted-foreground">{contribution.partners?.email}</p>
+                    </div>
+                    <p className="text-xl font-semibold">${Number(contribution.amount).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(contribution.contribution_date), 'MMM d, yyyy')}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(contribution.id)}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleApprove(contribution.id, contribution.partner_id, Number(contribution.amount))}
+                      >
+                        Approve
+                      </Button>
+                    </div>
+                  </div>
+                  {contribution.proof_url && (
+                    <a 
+                      href={contribution.proof_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline mt-2 block"
+                    >
+                      View Proof
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Check className="w-12 h-12 mx-auto mb-2 text-success" />
+              <p className="text-sm">All caught up! No pending approvals.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
