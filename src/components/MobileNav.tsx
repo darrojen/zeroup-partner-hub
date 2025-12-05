@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink as RouterNavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Home, Trophy, Upload, Bell, User } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Home, Trophy, Upload, Bell, User, FileText, Settings } from 'lucide-react';
 
-const navItems = [
+const partnerNavItems = [
   { to: '/dashboard', icon: Home, label: 'Home' },
   { to: '/leaderboard', icon: Trophy, label: 'Rankings' },
   { to: '/submit', icon: Upload, label: 'Submit' },
@@ -10,12 +11,23 @@ const navItems = [
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
-export function BottomNav() {
+const adminNavItems = [
+  { to: '/dashboard', icon: Home, label: 'Home' },
+  { to: '/contributions', icon: FileText, label: 'Contributions' },
+  { to: '/notifications', icon: Bell, label: 'Alerts' },
+  { to: '/profile', icon: User, label: 'Profile' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
+];
+
+export function MobileNav() {
+  const { isAdmin } = useAuth();
+  const navItems = isAdmin ? adminNavItems : partnerNavItems;
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
-      <div className="flex items-center justify-around h-16 max-w-2xl mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border lg:hidden">
+      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
         {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
+          <RouterNavLink
             key={to}
             to={to}
             className={({ isActive }) =>
@@ -29,7 +41,7 @@ export function BottomNav() {
           >
             <Icon className="w-5 h-5" />
             <span className="text-[10px] font-medium">{label}</span>
-          </NavLink>
+          </RouterNavLink>
         ))}
       </div>
     </nav>
