@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { partner, isAdmin } = useAuth();
@@ -259,7 +260,7 @@ export default function DashboardPage() {
 
 // Admin Dashboard Component
 function AdminDashboard({ pendingContributions }: { pendingContributions: any[] }) {
-  const { toast } = require('@/hooks/use-toast').useToast();
+  const { toast } = useToast();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState('');
 
