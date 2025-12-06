@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { DollarSign, TrendingUp, TrendingDown, Calendar, ArrowRight, Check, Clock, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -33,7 +35,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('contributions')
-        .select('*, partners(full_name, email)')
+        .select('*, partners(full_name, email, user_id)')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
       return data || [];
@@ -258,8 +260,10 @@ export default function DashboardPage() {
 // Admin Dashboard Component
 function AdminDashboard({ pendingContributions }: { pendingContributions: any[] }) {
   const { toast } = require('@/hooks/use-toast').useToast();
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState('');
 
-  const handleApprove = async (contributionId: string, partnerId: string, amount: number) => {
+  const handleApprove = async (contributionId: string, partnerId: string, amount: number, partnerUserId: string) => {
     // Update contribution status
     const { error: updateError } = await supabase
       .from('contributions')
@@ -274,7 +278,7 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
     // Update partner's total contributions
     const { data: partnerData } = await supabase
       .from('partners')
-      .select('total_contributions, impact_score')
+      .select('total_contributions, impact_score, user_id')
       .eq('id', partnerId)
       .single();
 
@@ -289,16 +293,35 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
           impact_score: newScore 
         })
         .eq('id', partnerId);
+
+      // Notify partner about approval
+      await supabase.from('notifications').insert({
+        user_id: partnerData.user_id,
+        type: 'approval',
+        title: 'Contribution Approved',
+        message: `Your contribution of $${amount.toLocaleString()} has been approved and added to your total.`,
+        metadata: { contribution_id: contributionId, amount },
+      });
     }
 
     toast({ title: 'Success', description: 'Contribution approved and total updated' });
     window.location.reload();
   };
 
-  const handleReject = async (contributionId: string) => {
+  const handleReject = async (contributionId: string, partnerId: string, amount: number) => {
+    const { data: partnerData } = await supabase
+      .from('partners')
+      .select('user_id')
+      .eq('id', partnerId)
+      .single();
+
     const { error } = await supabase
       .from('contributions')
-      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+      .update({ 
+        status: 'rejected', 
+        reviewed_at: new Date().toISOString(),
+        rejection_reason: rejectComment || 'No reason provided'
+      })
       .eq('id', contributionId);
 
     if (error) {
@@ -306,6 +329,19 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
       return;
     }
 
+    // Notify partner about rejection
+    if (partnerData) {
+      await supabase.from('notifications').insert({
+        user_id: partnerData.user_id,
+        type: 'rejection',
+        title: 'Contribution Rejected',
+        message: `Your contribution of $${amount.toLocaleString()} was rejected. Reason: ${rejectComment || 'No reason provided'}`,
+        metadata: { contribution_id: contributionId, amount, reason: rejectComment },
+      });
+    }
+
+    setRejectingId(null);
+    setRejectComment('');
     toast({ title: 'Rejected', description: 'Contribution has been rejected' });
     window.location.reload();
   };
@@ -349,26 +385,54 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
                     </div>
                     <p className="text-xl font-semibold">${Number(contribution.amount).toLocaleString()}</p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(contribution.contribution_date), 'MMM d, yyyy')}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReject(contribution.id)}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleApprove(contribution.id, contribution.partner_id, Number(contribution.amount))}
-                      >
-                        Approve
-                      </Button>
+                  
+                  {rejectingId === contribution.id ? (
+                    <div className="space-y-3">
+                      <Input
+                        placeholder="Reason for rejection..."
+                        value={rejectComment}
+                        onChange={(e) => setRejectComment(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setRejectingId(null); setRejectComment(''); }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleReject(contribution.id, contribution.partner_id, Number(contribution.amount))}
+                        >
+                          Confirm Reject
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(contribution.contribution_date), 'MMM d, yyyy')}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRejectingId(contribution.id)}
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(contribution.id, contribution.partner_id, Number(contribution.amount), contribution.partners?.user_id)}
+                        >
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
                   {contribution.proof_url && (
                     <a 
                       href={contribution.proof_url} 
