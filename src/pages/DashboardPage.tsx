@@ -264,6 +264,24 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState('');
 
+  // Fetch total contributions from all partners
+  const { data: totalContributions } = useQuery({
+    queryKey: ['total-contributions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contributions')
+        .select('amount')
+        .eq('status', 'approved');
+      
+      if (error) {
+        console.error('Error fetching total contributions:', error);
+        return 0;
+      }
+      
+      return data?.reduce((sum, c) => sum + Number(c.amount), 0) || 0;
+    },
+  });
+
   const handleApprove = async (contributionId: string, partnerId: string, amount: number, partnerUserId: string) => {
     // Update contribution status
     const { error: updateError } = await supabase
@@ -354,20 +372,38 @@ function AdminDashboard({ pendingContributions }: { pendingContributions: any[] 
         <p className="text-muted-foreground text-sm">Manage partner contributions and approvals.</p>
       </header>
 
-      {/* Pending Stats */}
-      <Card className="border shadow-sm">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-full bg-warning/10">
-              <Clock className="w-6 h-6 text-warning" />
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Total Contributions */}
+        <Card className="border shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-full bg-success/10">
+                <DollarSign className="w-6 h-6 text-success" />
+              </div>
+              <div>
+                <p className="text-3xl font-semibold">${(totalContributions || 0).toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Total Contributions</p>
+              </div>
             </div>
-            <div>
-              <p className="text-3xl font-semibold">{pendingContributions.length}</p>
-              <p className="text-sm text-muted-foreground">Pending Approvals</p>
+          </CardContent>
+        </Card>
+
+        {/* Pending Stats */}
+        <Card className="border shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-full bg-warning/10">
+                <Clock className="w-6 h-6 text-warning" />
+              </div>
+              <div>
+                <p className="text-3xl font-semibold">{pendingContributions.length}</p>
+                <p className="text-sm text-muted-foreground">Pending Approvals</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Pending Contributions */}
       <Card className="border shadow-sm">
