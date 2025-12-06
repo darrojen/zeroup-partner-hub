@@ -10,6 +10,21 @@ import { useAuth } from '@/hooks/useAuth';
 
 type Period = 'weekly' | 'monthly' | 'all_time';
 
+interface LeaderboardEntry {
+  id: string;
+  partner_id: string;
+  rank_position: number;
+  total_amount: number;
+  period: string;
+  partner?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    rank: string;
+    impact_score: number;
+  };
+}
+
 export default function LeaderboardPage() {
   const [period, setPeriod] = useState<Period>('monthly');
   const { partner } = useAuth();
@@ -17,12 +32,18 @@ export default function LeaderboardPage() {
   const { data: leaderboard, isLoading } = useQuery({
     queryKey: ['leaderboard', period],
     queryFn: async () => {
+      // Use leaderboard_cache which has public read access
       const { data } = await supabase
-        .from('partners')
-        .select('*')
-        .order('total_contributions', { ascending: false })
+        .from('leaderboard_cache')
+        .select(`
+          *,
+          partner:partners(id, full_name, avatar_url, rank, impact_score)
+        `)
+        .eq('period', period)
+        .order('rank_position', { ascending: true })
         .limit(50);
-      return data || [];
+      
+      return (data as LeaderboardEntry[]) || [];
     },
   });
 
@@ -69,7 +90,7 @@ export default function LeaderboardPage() {
             <div className="flex items-center gap-4">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
                 <span className="font-semibold text-primary">
-                  #{leaderboard.findIndex((p) => p.id === partner.id) + 1 || '?'}
+                  #{leaderboard.find((entry) => entry.partner_id === partner.id)?.rank_position || '?'}
                 </span>
               </div>
               <div className="flex-1">
@@ -96,42 +117,48 @@ export default function LeaderboardPage() {
                 <div key={i} className="h-14 rounded-lg bg-secondary animate-pulse" />
               ))}
             </div>
-          ) : (
+          ) : leaderboard && leaderboard.length > 0 ? (
             <div className="space-y-2">
-              {leaderboard?.map((p, index) => (
+              {leaderboard.map((entry) => (
                 <div
-                  key={p.id}
+                  key={entry.id}
                   className={cn(
                     'flex items-center gap-3 p-3 rounded-lg border transition-colors',
-                    index < 3 ? 'bg-secondary/50' : 'bg-card',
-                    p.id === partner?.id && 'ring-1 ring-primary'
+                    entry.rank_position <= 3 ? 'bg-secondary/50' : 'bg-card',
+                    entry.partner_id === partner?.id && 'ring-1 ring-primary'
                   )}
                 >
                   <div className="flex items-center justify-center w-8">
-                    {getPositionIcon(index + 1)}
+                    {getPositionIcon(entry.rank_position)}
                   </div>
                   <Avatar className="w-9 h-9">
-                    <AvatarImage src={p.avatar_url || undefined} />
+                    <AvatarImage src={entry.partner?.avatar_url || undefined} />
                     <AvatarFallback className="bg-secondary text-foreground text-sm">
-                      {p.full_name?.charAt(0)?.toUpperCase() || 'P'}
+                      {entry.partner?.full_name?.charAt(0)?.toUpperCase() || 'P'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">
-                      {p.full_name}
-                      {p.id === partner?.id && (
+                      {entry.partner?.full_name || 'Partner'}
+                      {entry.partner_id === partner?.id && (
                         <span className="ml-2 text-xs text-primary">(You)</span>
                       )}
                     </p>
-                    <p className="text-xs text-muted-foreground capitalize">{p.rank} • {p.impact_score} pts</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {entry.partner?.rank || 'bronze'} • {entry.partner?.impact_score || 0} pts
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">
-                      ${Number(p.total_contributions).toLocaleString()}
+                      ${Number(entry.total_amount).toLocaleString()}
                     </p>
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-sm">No leaderboard data available yet</p>
             </div>
           )}
         </CardContent>
