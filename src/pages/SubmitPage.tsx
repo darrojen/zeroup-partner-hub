@@ -99,7 +99,7 @@ export default function SubmitPage() {
       }
 
       // Create contribution record
-      const { error: insertError } = await supabase.from('contributions').insert({
+      const { data: contributionData, error: insertError } = await supabase.from('contributions').insert({
         partner_id: partner.id,
         amount: parseFloat(amount),
         contribution_date: date,
@@ -107,9 +107,27 @@ export default function SubmitPage() {
         proof_url: proofUrl,
         notes: notes || null,
         status: 'pending',
-      });
+      }).select().single();
 
       if (insertError) throw insertError;
+
+      // Notify all admins about the new contribution
+      const { data: admins } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['admin', 'super_admin']);
+
+      if (admins && admins.length > 0) {
+        const notifications = admins.map((admin) => ({
+          user_id: admin.user_id,
+          type: 'contribution',
+          title: 'New Contribution Submitted',
+          message: `${partner.full_name} submitted a contribution of $${parseFloat(amount).toLocaleString()} for approval.`,
+          metadata: { contribution_id: contributionData.id, partner_id: partner.id, amount: parseFloat(amount) },
+        }));
+
+        await supabase.from('notifications').insert(notifications);
+      }
 
       setUploadProgress(100);
       setIsSuccess(true);
