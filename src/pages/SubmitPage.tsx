@@ -90,11 +90,9 @@ export default function SubmitPage() {
 
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage
-          .from('proof-uploads')
-          .getPublicUrl(fileName);
-
-        proofUrl = urlData.publicUrl;
+        // Store the file path - access will be controlled by RLS policies
+        // Admins and owners can view via signed URLs when needed
+        proofUrl = fileName;
         setUploadProgress(70);
       }
 
