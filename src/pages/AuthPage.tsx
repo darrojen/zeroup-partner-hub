@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
@@ -17,7 +17,6 @@ const signInSchema = z.object({
 
 const signUpSchema = signInSchema.extend({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
-  role: z.enum(['partner', 'admin']),
 });
 
 export default function AuthPage() {
@@ -27,7 +26,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'partner' | 'admin'>('partner');
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -47,7 +46,7 @@ export default function AuthPage() {
   const validateForm = () => {
     try {
       if (isSignUp) {
-        signUpSchema.parse({ email, password, fullName, role });
+        signUpSchema.parse({ email, password, fullName });
       } else {
         signInSchema.parse({ email, password });
       }
@@ -76,7 +75,7 @@ export default function AuthPage() {
 
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, fullName, role);
+        const { error } = await signUp(email, password, fullName);
         if (error) {
           if (error.message.includes('already registered')) {
             toast({
@@ -153,21 +152,6 @@ export default function AuthPage() {
                     />
                     {errors.fullName && (
                       <p className="text-xs text-destructive">{errors.fullName}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Account Type</Label>
-                    <Select value={role} onValueChange={(value: 'partner' | 'admin') => setRole(value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select account type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="partner">Partner</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {errors.role && (
-                      <p className="text-xs text-destructive">{errors.role}</p>
                     )}
                   </div>
                 </>
