@@ -10,7 +10,7 @@ interface AuthContextType {
   userRole: AppRole | null;
   isLoading: boolean;
   isAdmin: boolean;
-  signUp: (email: string, password: string, fullName: string, role?: 'partner' | 'admin') => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshPartner: () => Promise<void>;
@@ -82,9 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'partner' | 'admin' = 'partner') => {
+  const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -94,16 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     });
-
-    // If signup successful and role is admin, insert into user_roles
-    if (!error && data.user && role === 'admin') {
-      await supabase
-        .from('user_roles')
-        .insert({
-          user_id: data.user.id,
-          role: 'admin',
-        });
-    }
 
     return { error };
   };
